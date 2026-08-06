@@ -1,0 +1,14 @@
+{
+  "name": "lvm-plugins",
+  "owner": {
+    "name": "Equipo LVM - Procom"
+  },
+  "plugins": [
+    {
+      "name": "lvm-toolkit",
+      "source": "./lvm-toolkit",
+      "description": "Skills del equipo LVM para infraestructura, incidentes y automatizaciones",
+      "version": "0.2.0"
+    }
+  ]
+}

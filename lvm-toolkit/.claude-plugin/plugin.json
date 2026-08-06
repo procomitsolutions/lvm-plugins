@@ -1,0 +1,8 @@
+{
+  "name": "lvm-toolkit",
+  "version": "0.2.0",
+  "description": "Skills del equipo LVM (Procom) para infraestructura, diagnóstico de incidentes y automatizaciones sobre Docker Swarm, PrestaShop/Wuala y Flexxus",
+  "author": {
+    "name": "Equipo LVM - Procom"
+  }
+}
