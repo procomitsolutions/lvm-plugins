@@ -6,7 +6,6 @@ Skills del equipo LVM (Procom) para trabajar sobre la infraestructura de Docker 
 
 | Skill | Qué hace |
 |---|---|
-| `contexto-infra-procom` | Referencia viva de la infraestructura (nodos Swarm, entornos de Portainer, Cloudflare, orgs de GitHub, convenciones de nombres). Se nutre con el uso de todo el equipo — al detectar o corregir un dato de infra, actualizarla. |
 | `chequeo-compose` | Triage automático de un `docker-compose.yml` que falla al deployar en Swarm/Portainer. |
 | `chequeo-logs` | Análisis de logs (Loki/Traefik/Apache/aplicación) para diagnosticar un incidente y producir una respuesta de ticket. |
 | `analizar-contexto-wuala` | Analiza el `contexto.md` generado por el recolector de diagnóstico de un sitio Wuala. |
