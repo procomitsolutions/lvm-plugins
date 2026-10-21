@@ -1,0 +1,26 @@
+# .github/workflows/ci.yml — llama al reutilizable
+name: CI (caller)
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Mismo repo:  ./.github/workflows/reusable-build.yml
+    # Otro repo:   mi-org/plantillas/.github/workflows/reusable-build.yml@<sha>   (fijar SHA o tag)
+    uses: ./.github/workflows/reusable-build.yml
+    with:
+      node-version: '24'
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}   # o `secrets: inherit` (menos explícito)
+
+  report:
+    needs: build
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - run: 'echo "Artefacto: ${{ needs.build.outputs.artifact-name }}"'

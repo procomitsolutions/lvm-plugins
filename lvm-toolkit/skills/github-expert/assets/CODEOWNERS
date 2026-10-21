@@ -1,0 +1,15 @@
+# .github/CODEOWNERS — la ÚLTIMA coincidencia gana. Los owners necesitan permiso de escritura.
+*                         @mi-org/desarrollo
+
+# Infraestructura y CI: cambios sensibles
+/.github/                 @mi-org/plataforma
+/.github/workflows/       @mi-org/plataforma @mi-org/seguridad
+/infra/                   @mi-org/plataforma
+*.tf                      @mi-org/plataforma
+
+# Seguridad
+/SECURITY.md              @mi-org/seguridad
+/src/auth/                @mi-org/seguridad
+
+# Docs (sin bloquear a desarrollo)
+/docs/                    @mi-org/docs

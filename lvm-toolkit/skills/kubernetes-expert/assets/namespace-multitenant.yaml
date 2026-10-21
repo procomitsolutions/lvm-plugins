@@ -1,0 +1,65 @@
+# Namespace de equipo con Pod Security "restricted", cuota y defaults de recursos.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: team-a
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: team-a-quota
+  namespace: team-a
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.memory: 32Gi
+    requests.storage: 200Gi
+    persistentvolumeclaims: "20"
+    pods: "100"
+    services.loadbalancers: "1"
+    services.nodeports: "0"
+    count/secrets: "50"
+---
+# Con ResourceQuota de CPU/memoria, todo pod DEBE declarar requests/limits:
+# LimitRange pone defaults para que no se rechacen.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: team-a-defaults
+  namespace: team-a
+spec:
+  limits:
+  - type: Container
+    defaultRequest:
+      cpu: 100m
+      memory: 128Mi
+    default:
+      memory: 256Mi
+    max:
+      cpu: "4"
+      memory: 8Gi
+  - type: PersistentVolumeClaim
+    max:
+      storage: 50Gi
+---
+# Añadir además: assets/networkpolicy-base.yaml (con namespace team-a)
+# y un RoleBinding del ClusterRole "edit" o "admin" para el grupo del equipo:
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: team-a-edit
+  namespace: team-a
+subjects:
+- kind: Group
+  name: team-a-devs                  # grupo del proveedor OIDC
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: edit
+  apiGroup: rbac.authorization.k8s.io

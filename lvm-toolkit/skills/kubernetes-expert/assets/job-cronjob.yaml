@@ -1,0 +1,78 @@
+# Job indexado con política de fallos + CronJob con zona horaria y limpieza.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: process-shards
+  namespace: app-ns
+spec:
+  completions: 10
+  parallelism: 3
+  completionMode: Indexed            # cada pod recibe JOB_COMPLETION_INDEX (0..9)
+  backoffLimitPerIndex: 2
+  maxFailedIndexes: 2
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 86400     # borrar el Job 1 día después de terminar
+  podFailurePolicy:
+    rules:
+    - action: FailIndex              # error de configuración: no reintentar ese índice
+      onExitCodes:
+        containerName: worker
+        operator: In
+        values: [42]
+    - action: Ignore                 # disrupciones (drain, preemption) no cuentan como fallo
+      onPodConditions:
+      - type: DisruptionTarget
+  template:
+    spec:
+      restartPolicy: Never           # obligatorio con podFailurePolicy
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+      - name: worker
+        image: registry.example.com/worker:2.3.0
+        command: ["/app/worker", "--shard=$(JOB_COMPLETION_INDEX)"]
+        resources:
+          requests: {cpu: 250m, memory: 256Mi}
+          limits: {memory: 512Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: ["ALL"]}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-backup
+  namespace: app-ns
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "America/Argentina/Buenos_Aires"
+  concurrencyPolicy: Forbid          # no solapar ejecuciones
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 7200
+      ttlSecondsAfterFinished: 172800
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: backup
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+          - name: backup
+            image: registry.example.com/backup:1.8.0
+            args: ["--target=s3://backups/db"]
+            resources:
+              requests: {cpu: 100m, memory: 128Mi}
+              limits: {memory: 512Mi}
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+# Ejecutar ahora: kubectl create job --from=cronjob/nightly-backup backup-manual -n app-ns

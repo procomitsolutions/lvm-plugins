@@ -1,0 +1,43 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "github-actions"   # mantiene acciones (incluye SHAs fijados con comentario de versión)
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Argentina/Buenos_Aires"
+    cooldown:
+      default-days: 5          # evita versiones recién publicadas (ataques de supply chain)
+    open-pull-requests-limit: 10
+    groups:
+      prod-minor-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      dev:
+        dependency-type: "development"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]   # majors a mano
+    labels: ["dependencies"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"

@@ -1,0 +1,27 @@
+# .github/actions/setup-proyecto/action.yml — acción compuesta local
+# Uso:  - uses: ./.github/actions/setup-proyecto   (tras actions/checkout)
+name: Setup del proyecto
+description: Instala Node, restaura cache e instala dependencias
+inputs:
+  node-version:
+    description: Versión de Node
+    required: false
+    default: '24'
+outputs:
+  cache-hit:
+    description: Si hubo cache de node_modules
+    value: ${{ steps.cache.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: nm-${{ runner.os }}-${{ inputs.node-version }}-${{ hashFiles('package-lock.json') }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash               # obligatorio en composite
+      run: npm ci

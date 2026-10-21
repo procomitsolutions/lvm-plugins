@@ -1,0 +1,84 @@
+# Políticas base por namespace. Requiere un CNI que implemente NetworkPolicy.
+# 1) Denegar todo el ingress y egress
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: app-ns
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# 2) Permitir DNS (sin esto nada resuelve nombres)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: app-ns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:                   # mismo elemento = AND
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - {protocol: UDP, port: 53}
+    - {protocol: TCP, port: 53}
+---
+# 3) Permitir tráfico entre pods del mismo namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: app-ns
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+  - from:
+    - podSelector: {}
+  egress:
+  - to:
+    - podSelector: {}
+---
+# 4) Permitir que el ingress controller / gateway llegue al frontend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress
+  namespace: app-ns
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: web
+  policyTypes: [Ingress]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-system   # ajustar al namespace del controlador
+    ports:
+    - {protocol: TCP, port: 8080}
+---
+# 5) Permitir egress del backend a una API externa por CIDR (ejemplo)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-api
+  namespace: app-ns
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - ipBlock:
+        cidr: 203.0.113.0/24
+    ports:
+    - {protocol: TCP, port: 443}

@@ -1,0 +1,28 @@
+# .github/workflows/copilot-setup-steps.yml
+# Prepara el entorno del Copilot cloud agent ANTES de que empiece a trabajar.
+# El job DEBE llamarse `copilot-setup-steps`. Se ejecuta también al cambiar el archivo, para validarlo.
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+  pull_request:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest     # también larger runners o ARC (self-hosted)
+    timeout-minutes: 30        # el máximo de una sesión del agente es 59 min
+    permissions:
+      contents: read           # el agente recibe su propio token; esto es solo para estos pasos
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci

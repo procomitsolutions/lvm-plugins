@@ -1,0 +1,185 @@
+# Deployment endurecido para producción + Service + PDB + HPA.
+# Reemplazar: web, app-ns, registry.example.com/web:1.0.0, puertos y recursos.
+# Cumple Pod Security Standard "restricted".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: app-ns
+  labels:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/instance: web-prod
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: shop
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  # Omitir 'replicas' si lo gestiona el HPA de abajo (evita que cada apply lo pise).
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:                       # INMUTABLE: no incluir la versión
+      app.kubernetes.io/name: web
+      app.kubernetes.io/instance: web-prod
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0                # nunca baja capacidad durante el rollout
+  minReadySeconds: 5
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: web
+        app.kubernetes.io/instance: web-prod
+        app.kubernetes.io/version: "1.0.0"
+    spec:
+      serviceAccountName: web
+      automountServiceAccountToken: false   # true solo si la app habla con la API
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: web
+            app.kubernetes.io/instance: web-prod
+        matchLabelKeys: ["pod-template-hash"]
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: web
+            app.kubernetes.io/instance: web-prod
+        matchLabelKeys: ["pod-template-hash"]
+      containers:
+      - name: app
+        image: registry.example.com/web:1.0.0     # tag fijo o @sha256:digest; nunca :latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        envFrom:
+        - configMapRef:
+            name: web-config
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 256Mi              # limit de CPU omitido a propósito (evita throttling)
+        startupProbe:
+          httpGet: {path: /healthz, port: http}
+          periodSeconds: 5
+          failureThreshold: 24         # hasta 2 min para arrancar
+        readinessProbe:
+          httpGet: {path: /ready, port: http}
+          periodSeconds: 5
+          timeoutSeconds: 2
+          failureThreshold: 3
+        livenessProbe:
+          httpGet: {path: /healthz, port: http}   # local y barata: sin dependencias externas
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+        lifecycle:
+          preStop:
+            sleep:
+              seconds: 5               # deja que los endpoints se actualicen antes del SIGTERM
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web
+  namespace: app-ns
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: web-config
+  namespace: app-ns
+data:
+  LOG_LEVEL: info
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: app-ns
+  labels:
+    app.kubernetes.io/name: web
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: web
+    app.kubernetes.io/instance: web-prod
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web
+  namespace: app-ns
+spec:
+  maxUnavailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: web
+      app.kubernetes.io/instance: web-prod
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: app-ns
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70        # % sobre requests: requiere requests de CPU y metrics-server
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60

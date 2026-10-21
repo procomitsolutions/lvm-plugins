@@ -1,0 +1,48 @@
+# Despliegue con environment protegido + OIDC (sin access keys guardadas).
+# Requisitos: environment "production" con revisores requeridos y rama main permitida;
+# rol IAM con trust policy condicionada a:
+#   token.actions.githubusercontent.com:aud = sts.amazonaws.com
+#   token.actions.githubusercontent.com:sub = repo:ORG/REPO:environment:production
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  queue: max            # despliegues en cola FIFO; no combinar con cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      id-token: write   # para pedir el token OIDC
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Credenciales AWS vía OIDC
+        uses: aws-actions/configure-aws-credentials@v4   # verificar versión / fijar SHA
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Azure:  azure/login con client-id/tenant-id/subscription-id (federated credential)
+      # GCP:    google-github-actions/auth con workload_identity_provider + service_account
+
+      - name: Desplegar
+        id: deploy
+        run: |
+          ./scripts/deploy.sh
+          echo "url=https://app.ejemplo.com" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,52 @@
+# .github/workflows/reusable-build.yml — workflow reutilizable
+name: Reusable build
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: '24'
+      working-directory:
+        type: string
+        default: '.'
+    secrets:
+      NPM_TOKEN:
+        required: false
+    outputs:
+      artifact-name:
+        description: Nombre del artefacto generado
+        value: ${{ jobs.build.outputs.artifact-name }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      artifact-name: ${{ steps.meta.outputs.name }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: npm run build
+      - id: meta
+        run: echo "name=build-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.name }}
+          path: ${{ inputs.working-directory }}/dist/
+          retention-days: 5

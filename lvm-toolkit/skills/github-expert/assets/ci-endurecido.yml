@@ -1,0 +1,67 @@
+# CI endurecido: permisos mínimos, concurrency, timeouts, cache y matrix.
+# Copiar a .github/workflows/ci.yml y adaptar los comandos.
+# Para producción, fija cada acción a un SHA completo: uses: actions/checkout@<sha40> # v6.x.y
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:            # necesario si usas merge queue
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: [22, 24]
+        include:
+          - os: windows-latest
+            node: 24
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false   # no deja el token en .git/config
+
+      - uses: actions/setup-node@v4   # verificar major vigente
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm test -- --ci
+
+      - name: Subir cobertura
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && matrix.node == 24 }}
+        uses: actions/upload-artifact@v4   # verificar major vigente
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+  # Job "puerta" con nombre estable para usar como ÚNICO check requerido en el ruleset.
+  ci-ok:
+    if: ${{ always() }}
+    needs: [test]
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      - name: Verificar resultado
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "test: $RESULT"
+          [ "$RESULT" = "success" ]
